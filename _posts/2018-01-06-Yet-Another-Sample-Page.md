@@ -1,5 +1,5 @@
 ---
-title: Yet Another Sample Page
+title: VulnHub Walkthrough - SafeHarbor: 1
 published: true
 ---
 
