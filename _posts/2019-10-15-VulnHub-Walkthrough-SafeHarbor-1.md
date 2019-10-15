@@ -9,7 +9,7 @@ Text can be **bold**, _italic_, ~~strikethrough~~ or `keyword`.
 
 [Link to another page](another-page).
 
-# [](#header-1)Service discovery scan
+# [](#header-2)Service discovery scan
 
 ```
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-15 16:49 EDT
