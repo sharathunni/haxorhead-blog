@@ -1,5 +1,5 @@
 ---
-title: VulnHub Walkthrough - SafeHarbor: 1
+title: VulnHub Walkthrough SafeHarbor 1
 published: true
 ---
 
