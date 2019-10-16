@@ -27,12 +27,12 @@ Nmap scan report for 192.168.1.21
 Host is up (0.0046s latency).
 Not shown: 998 closed ports
 PORT   STATE SERVICE VERSION
--22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
++22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
 | ssh-hostkey: 
 |   2048 fc:c6:49:ce:9b:54:7f:57:6d:56:b3:0a:30:47:83:b4 (RSA)
 |   256 73:86:8d:97:2e:60:08:8a:76:24:3c:94:72:8f:70:f7 (ECDSA)
 |_  256 26:48:91:66:85:a2:39:99:f5:9b:62:da:f9:87:4a:e6 (ED25519)
--80/tcp open  http    nginx 1.17.4
++80/tcp open  http    nginx 1.17.4
 | http-cookie-flags: 
 |   /: 
 |     PHPSESSID: 
