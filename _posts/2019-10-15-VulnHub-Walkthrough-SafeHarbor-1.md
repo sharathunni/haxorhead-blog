@@ -3,13 +3,29 @@ title: VulnHub Walkthrough SafeHarbor:1
 published: true
 ---
 
+I enjoyed playing this challenge and thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use non-traditional paths to some extent. I limited myself from using Metasploit or Cobalt Strike, which are often easily detected during red team engagements. So the goal was to use tools and scripts, that I often bookmarked and read about.
 
+If you want to play along, you can download the VM from Vulnhub here: https://www.vulnhub.com/entry/safeharbor-1,377/
+
+# [](#header-3) Description from VulnHub:
+
+```
+A harder VM designed to train for both pentesting newer IT infrastructure methodologies as well as network pivot practice.
+
+You'll need to be familiar with pivoting techniques, web app vulnerabilities, Metasploit and Meterpreter, as well as enumeration methodologies and a good bit of patience.
+
+As a note, there are two additional bonus flags that will appear in the /root directory based on pre-defined actions taken during the course of rooting the VM.
+
+
+Works better in VirtualBox than VMware
+
+```
 
 Text can be **bold**, _italic_, ~~strikethrough~~ or `keyword`.
 
 [Link to another page](another-page).
 
-# [](#header-2)Service discovery scan
+# [](#header-3)Service discovery scan:
 
 ```
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-15 16:49 EDT
