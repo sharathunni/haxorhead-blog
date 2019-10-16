@@ -3,9 +3,9 @@ title: VulnHub Walkthrough SafeHarbor:1
 published: true
 ---
 
-I enjoyed playing this challenge and thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use non-traditional paths to some extent. I limited myself from using Metasploit or Cobalt Strike, which are often easily detected during red team engagements. So the goal was to use tools and scripts, that I often bookmarked and read about.
+I enjoyed playing this challenge and I thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use non-traditional paths to some extent. I limited myself from using Metasploit or Cobalt Strike, which are often easily detected during red team engagements. So the goal was to use tools and scripts, that I often bookmarked and read about.
 
-If you want to play along, you can download the VM from Vulnhub here: [Link to another page](https://www.vulnhub.com/entry/safeharbor-1,377/)
+If you want to play along, you can download the VM from Vulnhub here: [SafeHarbor:1](https://www.vulnhub.com/entry/safeharbor-1,377/)
 
 **Description from VulnHub:**
 
@@ -16,23 +16,23 @@ As a note, there are two additional bonus flags that will appear in the /root di
 Works better in VirtualBox than VMware
 ```
 
-As mentioned in the description the VM works well on VirtualBox, I tried Vmware Fusion and DHCP does not seem to work. Once you have the VM up and running, discover the live hosts in your vmnet adapter to find 
+As mentioned in the description the VM works well on VirtualBox, I tried Vmware Fusion and DHCP does not seem to work. Once you have the VM up and running, discover the live hosts in your vmnet adapter to find the VM IP address (not covered in this post)
 
 **Service discovery scan:**
 
-```
+```diff
 $ sudo nmap -sS -sV -Pn 192.168.1.21 -A 
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-16 10:47 EDT
 Nmap scan report for 192.168.1.21
 Host is up (0.0046s latency).
 Not shown: 998 closed ports
 PORT   STATE SERVICE VERSION
-22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+-22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
 | ssh-hostkey: 
 |   2048 fc:c6:49:ce:9b:54:7f:57:6d:56:b3:0a:30:47:83:b4 (RSA)
 |   256 73:86:8d:97:2e:60:08:8a:76:24:3c:94:72:8f:70:f7 (ECDSA)
 |_  256 26:48:91:66:85:a2:39:99:f5:9b:62:da:f9:87:4a:e6 (ED25519)
-80/tcp open  http    nginx 1.17.4
+-80/tcp open  http    nginx 1.17.4
 | http-cookie-flags: 
 |   /: 
 |     PHPSESSID: 
@@ -178,7 +178,7 @@ Let's go ahead and get a reverse shell, using the default one available on Kali 
 
 Great! Now I have a reverse shell:
 
-![](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_1.gif)
+![reverse_shell_gif](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_1.gif)
 
 There should be whitespace between paragraphs.
 
