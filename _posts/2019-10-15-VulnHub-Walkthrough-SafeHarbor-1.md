@@ -178,7 +178,7 @@ Let's go ahead and get a reverse shell, using the default one available on Kali 
 
 Great! Now I have a reverse shell:
 
-[![asciicast](https://asciinema.org/a/14.png)](https://asciinema.org/a/14?autoplay=1)
+![](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_1.gif)
 
 There should be whitespace between paragraphs.
 
