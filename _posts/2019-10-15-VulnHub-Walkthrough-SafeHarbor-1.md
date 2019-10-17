@@ -294,7 +294,7 @@ Outside   |                                                 reverse connect to 8
           |                                                                         | 8888:(chisel server listening)
           |                       ^          172.20.0.138:3306 |                    |            |
           |                       |                            |                    |            v
-          |                    | <--------------------------|                       |     9999:127.0.0.1 (connect via mysql)
+          |                       | <--------------------------|                    |     9999:127.0.0.1 (connect via mysql)
           |                       v                                                 |
           |             [Docker Container running MySQL]:3306                       |
           |                                                                         |
