@@ -1,6 +1,6 @@
 ---
 title: VulnHub Walkthrough SafeHarbor:1
-published: false
+published: true
 ---
 
 I enjoyed playing this challenge and I thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use non-traditional paths to some extent. I limited myself from using Metasploit or Cobalt Strike, which are often easily detected during red team engagements. So the goal was to use tools and scripts, that I often bookmarked and read about.
