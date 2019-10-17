@@ -213,15 +213,14 @@ $balance = $balanceRow[0];
 
 ```
 
-So where are the other backend components since I found only one interface. Let's look at the cheatsheet: [Linux - Privilege Escalation.md](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Linux%20-%20Privilege%20Escalation.md)
+Yay! found the MySQL credentials. So where are the other backend components since I found only one interface. Let's take a look at the cheatsheet and see if we missed anything [Linux - Privilege Escalation.md](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Linux%20-%20Privilege%20Escalation.md)
 
-```Platform/software specific tests:
+```
+Platform/software specific tests:
 Checks to determine if we're in a Docker container
 ```
 
 After looking up on how to determine that, thanks to this post on [StackOverflow](https://stackoverflow.com/questions/23513045/how-to-check-if-a-process-is-running-inside-docker-container)
-
-This comes as no surprise, but verify first :-)
 
 ```sh
 cat /proc/1/cgroup
@@ -240,7 +239,9 @@ cat /proc/1/cgroup
 0::/system.slice/containerd.service
 ```
 
-Alright, I could now run a port scan to find all live hosts or simply do an arp scan to find the neighbours:
+This comes as no surprise, but verify first :-)
+
+Alright, let me simply do an arp scan to find the neighbours:
 
 ```
 arp -a
@@ -252,14 +253,16 @@ harborbank_mysql_1.harborbank_backend (172.20.0.138) at 02:42:ac:14:00:8a [ether
 
 ```
 
-**Privilege escalation? No! Let's just ~~pivot~~ reverse pivot**
+**Privilege escalation? No! Let's just ~~pivot~~ reverse pivot:**
 
-How do I tunnel my traffic through the host VM? I could open a listening port on the docker container but the host VM would not let my traffic through (corporate firewalls?) I could very well use a meterpreter PHP payload and let metasploit handle the proxying for me. But I said I would try new tools and techniques to solve this challenge.
+How do I tunnel my traffic through the host VM? I could open a listening port on the docker container but the host VM would not let my traffic through (like corporate firewalls? :-/) I could very well use a meterpreter PHP payload and let metasploit handle the proxying for me. But I said I would try new tools and techniques to solve this challenge.
+
+I have illustrated the current situation below, not to be treated as a network diagram!
 
 ```
-          22  <---> 
-[Host VM]              80:[Docker Container running PHP]:(higher order port--->  8000:[Attacker Machine]
-          80  <--->                                      reverse connect)
+          22 |<--->                                                             |
+[Host VM]    |         80:[Docker Container running PHP]:(higher order port---> | 8000:[Attacker Machine]
+          80 |<--->                                      reverse connect)       |
                                   ^
                                   | 
                                   |
@@ -268,7 +271,19 @@ How do I tunnel my traffic through the host VM? I could open a listening port on
 
 ```
 
-In situations where there are no SSH or other ways to tunnel the traffic, we could use reverse pivot. The victim machine (client) will connect back to the attacker machine (server) and then open a tunnel to route the traffic to the destination server and port. Let me illustrate:
+In situations where there are no SSH or other ways to tunnel the traffic, we could use reverse pivot. The victim machine (client) will connect back (reverse) to the attacker machine (server) and then open a tunnel to route the traffic to the destination server(MySQL) and port. 
+
+There are quite a lot of tools that comes to my mind for such a situation. Listing them below for your reference:
+
+* [3proxy](https://github.com/z3APA3A/3proxy)
+* [rpivot](https://github.com/klsecservices/rpivot)
+* [reGeorg](https://github.com/sensepost/reGeorg)
+
+Out of these I chose to go with [Chisel](https://github.com/jpillora/chisel#socks5-guide), mainly because of it's simplicity, written in golang and it can be cross-compiled. 
+
+
+
+Let me illustrate again:
 
 ```
           | :22  <--->                                                              |
@@ -285,13 +300,11 @@ In situations where there are no SSH or other ways to tunnel the traffic, we cou
 
 ```
 
-There are quite a lot of tools that comes to my mind for such a situation. Listing them below for your reference:
+As explained in the help page of the tool, specify the remote server followed by the options; the remote port and destination host/port.
 
-* [3proxy](https://github.com/z3APA3A/3proxy)
-* [rpivot](https://github.com/klsecservices/rpivot)
-* [reGeorg](https://github.com/sensepost/reGeorg)
-
-Out of the many lot I chose to go with [Chisel](https://github.com/jpillora/chisel#socks5-guide), mainly because of it's simplicity, written in golang and can be cross-compiled. 
+``
+"R:<remote-port>:<target-localhost>:<local-port>"
+``
 
 **On the victim machine run:**
 
@@ -302,6 +315,7 @@ Out of the many lot I chose to go with [Chisel](https://github.com/jpillora/chis
 ![chisel_command](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.png)
 
 **On the attacker machine run**
+
 ```sh
 /chisel_linux_amd64 server -p 8888 -reverse 
 ```
@@ -311,6 +325,7 @@ Out of the many lot I chose to go with [Chisel](https://github.com/jpillora/chis
 Now, let's go ahead and connect to MySQL and see what's in the database for us:
 
 ![mysql_connect](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_2.gif)
+
 
 
 There should be whitespace between paragraphs.
@@ -429,5 +444,7 @@ Long, single-line code blocks should not wrap. They should horizontally scroll i
 The final element.
 ```
 
-References:
-- A Red Teamer's guide to pivoting](https://artkond.com/2017/03/23/pivoting-guide/)
+**References:**
+
+- [A Red Teamer's guide to pivoting](https://artkond.com/2017/03/23/pivoting-guide/)
+- [Network Pivoting Techniques.md](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Network%20Pivoting%20Techniques.md)
