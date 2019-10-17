@@ -260,15 +260,15 @@ How do I tunnel my traffic through the host VM? I could open a listening port on
 I have illustrated the current situation below, not to be treated as a network diagram!
 
 ```
-          22 |<--->                                                             |
-[Host VM]    |         80:[Docker Container running PHP]:(higher order port---> | 8000:[Attacker Machine]
-          80 |<--->                                      reverse connect)       |
-                                  ^
-                                  | 
-                                  |
-                                  v  
-                        [Docker Container running MySQL]:3306
-
+         :22 |<--->               [HOST VM]                                     |
+Perimeter/   |         80:[Docker Container running PHP]:(higher order port --->| 8000:[Attacker Machine]
+Outside  :80 |<--->                                      reverse connect)       |
+             |                     ^                                            |
+             |                     |                                            |
+             |                     |                                            |
+             |                     v                                            |
+             |           [Docker Container running MySQL]:3306                  |
+             |                                                                  |
 ```
 
 In situations where there are no SSH or other ways to tunnel the traffic, we could use reverse pivot. The victim machine (client) will connect back (reverse) to the attacker machine (server) and then open a tunnel to route the traffic to the destination server(MySQL) and port. 
@@ -286,18 +286,18 @@ Out of these I chose to go with [Chisel](https://github.com/jpillora/chisel#sock
 Let me illustrate again:
 
 ```
-          | :22  <--->                                                              |
-[Host VM] |               80:[Docker Container running PHP]:(higher order port <--->| 8000:(netcat)
-          |                                                 reverse connect)        |        
+          | :22  <--->                 [HOST VM]                                    |
+Perimeter/|               80:[Docker Container running PHP]:(higher order port ---> | 8000:(netcat)
+Outside   |                                                 reverse connect to 8000)|        
           | :80  <--->                                      :(chisel reverse        |     [Attacker Machine]
-                                                            connect to 8888) <--->  |
-                                                                                    | 8888:(chisel server listening)
-                                  ^          172.20.0.138:3306 |                    |            |
-                                  |                            |                                 v
-                                  | <--------------------------|                             9999:127.0.0.1 (connect via mysql)
-                                  v  
-                        [Docker Container running MySQL]:3306
-
+          |                                                 connect to 8888)   ---> |
+          |                                                                         | 8888:(chisel server listening)
+          |                       ^          172.20.0.138:3306 |                    |            |
+          |                       |                            |                    |            v
+          |                    | <--------------------------|                       |     9999:127.0.0.1 (connect via mysql)
+          |                       v                                                 |
+          |             [Docker Container running MySQL]:3306                       |
+          |                                                                         |
 ```
 
 As explained in the help page of the tool, specify the remote server followed by the options; the remote port and destination host/port.
