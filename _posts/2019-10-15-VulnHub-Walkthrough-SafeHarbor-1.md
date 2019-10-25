@@ -308,7 +308,6 @@ Outside   |                                                 reverse connect to 8
 ./chisel client 192.168.1.22:8888 R:9999:172.20.0.138:3306
 ```
 
-![chisel_command](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.png)
 
 **On the (Kali) attacker machine run**
 
@@ -444,6 +443,8 @@ Let's see what's in there:
 
 
 Using socks4a:
+
+
 ![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_16.png)
 
 
