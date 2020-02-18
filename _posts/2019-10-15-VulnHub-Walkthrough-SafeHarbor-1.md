@@ -7,6 +7,8 @@ I enjoyed playing this challenge and I thought it would be a great idea to write
 
 If you want to play along, you can download the VM from Vulnhub here: [SafeHarbor:1](https://www.vulnhub.com/entry/safeharbor-1,377/)
 
+[![](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=YL597KBH5LS7L&item_name=For+walkthrough/guides&currency_code=USD&source=url)
+
 **Description from VulnHub:**
 
 ```
