@@ -3,11 +3,13 @@ title: VulnHub Walkthrough SafeHarbor:1
 published: true
 ---
 
+[![](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=YL597KBH5LS7L&item_name=For+walkthrough/guides&currency_code=USD&source=url)
+
+
 I enjoyed playing this challenge and I thought it would be a great idea to write a walkthrough. Even though most of the techniques required to solve the challenges were well known I tried to use some non-traditional ways. I limited myself from using Metasploit for the most part, which is often easily detected during red team engagements. So the goal was to use tools and scripts, that I often use during live engagements.
 
 If you want to play along, you can download the VM from Vulnhub here: [SafeHarbor:1](https://www.vulnhub.com/entry/safeharbor-1,377/)
 
-[![](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=YL597KBH5LS7L&item_name=For+walkthrough/guides&currency_code=USD&source=url)
 
 **Description from VulnHub:**
 
